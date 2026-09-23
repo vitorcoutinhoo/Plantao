@@ -8,29 +8,8 @@
 
 ---
 
-**Valores válidos para `cargo`:**
-
-| Valor |
-|-------|
-| `Analista` |
-| `Gerente` |
-| `Consultor` |
-| `Técnico` |
-| `Outro` |
-| `Desenvolvedor Frontend` |
-| `Desenvolvedor Backend` |
-| `Desenvolvedor Fullstack` |
-
-**Valores válidos para `setor`:**
-
-| Valor |
-|-------|
-| `TI` |
-| `RH` |
-| `Financeiro` |
-| `Suporte` |
-| `Desenvolvimento` |
-| `Diretoria` |
+Os campos `cargo` e `setor` são obrigatórios e aceitam os valores gerenciados
+dinamicamente pelos endpoints de cargos e setores.
 
 ---
 
