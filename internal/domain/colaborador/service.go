@@ -333,26 +333,11 @@ func StatusColaboradorString(status StatusColaborador) (string, error) {
 } // Fim StatusColaboradorString
 
 func ParseCargoColaborador(s string) (CargoColaborador, error) {
-	switch s {
-	case string(CargoAnalista):
-		return CargoAnalista, nil
-	case string(CargoGerente):
-		return CargoGerente, nil
-	case string(CargoConsultor):
-		return CargoConsultor, nil
-	case string(CargoTecnico):
-		return CargoTecnico, nil
-	case string(CargoOutro):
-		return CargoOutro, nil
-	case string(CargoDesenvolvedorFrontend):
-		return CargoDesenvolvedorFrontend, nil
-	case string(CargoDesenvolvedorBackend):
-		return CargoDesenvolvedorBackend, nil
-	case string(CargoDesenvolvedorFullstack):
-		return CargoDesenvolvedorFullstack, nil
-	default:
-		return "", fmt.Errorf("cargo inválido: %s", s)
+	if strings.TrimSpace(s) == "" {
+		return "", ErrorInvalidCargo
 	}
+
+	return CargoColaborador(s), nil
 }
 
 func (s *ColaboradorService) notificarColaborador(col *Colaborador, tipo comunicacao.TipoComunicacao) {
@@ -368,20 +353,9 @@ func (s *ColaboradorService) notificarColaborador(col *Colaborador, tipo comunic
 }
 
 func ParseSetorColaborador(s string) (SetorColaborador, error) {
-	switch s {
-	case string(SetorRH):
-		return SetorRH, nil
-	case string(SetorTI):
-		return SetorTI, nil
-	case string(SetorFinanceiro):
-		return SetorFinanceiro, nil
-	case string(SetorSuporte):
-		return SetorSuporte, nil
-	case string(SetorDesenvolvimento):
-		return SetorDesenvolvimento, nil
-	case string(SetorDiretoria):
-		return SetorDiretoria, nil
-	default:
-		return "", fmt.Errorf("setor inválido: %s", s)
+	if strings.TrimSpace(s) == "" {
+		return "", ErrorInvalidSetor
 	}
+
+	return SetorColaborador(s), nil
 }
