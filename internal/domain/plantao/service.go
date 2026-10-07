@@ -269,7 +269,7 @@ func (s *PlantaoService) FecharPlantao(ctx context.Context, plantaoID, usuarioID
 		if err != nil {
 			return err
 		}
-		if calculo.ValorTotalCentavos <= 0 || calculo.ValorTotalCentavos > maxPagamentoCentavos {
+		if calculo.ValorTotalCentavos < 0 || calculo.ValorTotalCentavos > maxPagamentoCentavos {
 			return ErrorValorTotalInvalido
 		}
 
@@ -335,7 +335,7 @@ func (s *PlantaoService) PagarPlantao(ctx context.Context, plantaoID, usuarioID 
 		default:
 			return ErrorInvalidTransitionStatus
 		}
-		if p.ValorTotal <= 0 {
+		if p.ValorTotal < 0 {
 			return ErrorValorTotalInvalido
 		}
 

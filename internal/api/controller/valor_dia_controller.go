@@ -43,7 +43,7 @@ func (c *ValorDiaController) SetValor(ctx *gin.Context) {
 		return
 	}
 
-	valor, err := c.service.SetValor(ctx.Request.Context(), financeiro.TipoDia(req.TipoDia), req.Valor, req.Descricao)
+	valor, err := c.service.SetValor(ctx.Request.Context(), financeiro.TipoDia(req.TipoDia), *req.Valor, req.Descricao)
 	if err != nil {
 		apierr.Respond(ctx, err)
 		return

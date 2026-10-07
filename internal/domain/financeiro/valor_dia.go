@@ -14,7 +14,7 @@ import (
 
 var (
 	ErrorTipoDiaInvalido       = errors.New("Tipo de dia inválido!")
-	ErrorValorDiaInvalido      = errors.New("Valor deve ser maior que zero!")
+	ErrorValorDiaInvalido      = errors.New("Valor deve ser maior ou igual a zero!")
 	ErrorValorDiaNotFound      = errors.New("Configuração de valor não encontrada!")
 	ErrorValorDiaAlreadyExists = errors.New("Configuração de valor já existe!")
 	ErrorPrecisaoValorDia      = errors.New("Valor deve possuir no máximo duas casas decimais!")
@@ -184,7 +184,7 @@ func (a *AtualizacaoValorDia) temCampos() bool {
 }
 
 func validarValorMonetario(valor float64) error {
-	if valor <= 0 || math.IsNaN(valor) || math.IsInf(valor, 0) {
+	if valor < 0 || math.IsNaN(valor) || math.IsInf(valor, 0) {
 		return ErrorValorDiaInvalido
 	}
 	if valor > 99_999_999.99 {
@@ -241,7 +241,7 @@ func (s *CalculoService) Calcular(ctx context.Context, periodo *shared.Periodo, 
 			s.log.Warn("valor não configurado para data do cálculo financeiro", "tipo_dia", tipoDia, "data", data, "error", err)
 			return nil, err
 		}
-		if valorCentavos <= 0 {
+		if valorCentavos < 0 {
 			return nil, ErrorValorDiaInvalido
 		}
 		if resultado.ValorTotalCentavos > math.MaxInt64-valorCentavos {
