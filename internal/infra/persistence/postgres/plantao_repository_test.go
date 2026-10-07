@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"plantao/internal/domain/financeiro"
 	"plantao/internal/domain/plantao"
 	"plantao/internal/domain/shared"
 
@@ -21,6 +22,48 @@ func TestTranslateTransactionErrorMapeiaConcorrencia(t *testing.T) {
 		if !errors.Is(err, plantao.ErrorConflitoConcorrencia) {
 			t.Fatalf("SQLSTATE %s não foi mapeado: %v", code, err)
 		}
+	}
+}
+
+func TestPlantaoTransactionFindValorDiaCentavosAceitaZero(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL não configurada")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	pool, err := pgxpool.New(ctx, databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+
+	const tipoDia = financeiro.TipoDia("TESTE_VALOR_ZERO_CODEX")
+	_, _ = pool.Exec(ctx, `DELETE FROM config_valores_dia WHERE tipo_dia = $1`, tipoDia)
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cleanupCancel()
+		_, _ = pool.Exec(cleanupCtx, `DELETE FROM config_valores_dia WHERE tipo_dia = $1`, tipoDia)
+	})
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO config_valores_dia (tipo_dia, valor, vigencia_inicio)
+		VALUES ($1, 0, '1900-01-01')
+	`, tipoDia); err != nil {
+		t.Fatal(err)
+	}
+
+	repository := NewPlantaoRepository(pool)
+	var centavos int64
+	err = repository.WithTransaction(ctx, func(tx plantao.PlantaoTransaction) error {
+		centavos, err = tx.FindValorDiaCentavos(ctx, tipoDia)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if centavos != 0 {
+		t.Fatalf("centavos = %d, esperado 0", centavos)
 	}
 }
 

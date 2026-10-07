@@ -122,6 +122,34 @@ func TestCalcularPropagaAusenciaDeConfiguracao(t *testing.T) {
 	}
 }
 
+func TestCalcularAceitaZeroERejeitaValorNegativo(t *testing.T) {
+	data := time.Date(2026, 7, 6, 0, 0, 0, 0, time.UTC)
+	service := NewCalculoService(noopLogger{})
+
+	resultado, err := service.Calcular(
+		context.Background(),
+		&shared.Periodo{Inicio: data, Fim: data},
+		&calculoFonteFake{valores: map[TipoDia]int64{TipoDiaUtil: 0}},
+		time.UTC,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resultado.ValorTotalCentavos != 0 || len(resultado.Dias) != 1 || resultado.Dias[0].ValorCentavos != 0 {
+		t.Fatalf("cálculo com zero inesperado: %+v", resultado)
+	}
+
+	_, err = service.Calcular(
+		context.Background(),
+		&shared.Periodo{Inicio: data, Fim: data},
+		&calculoFonteFake{valores: map[TipoDia]int64{TipoDiaUtil: -1}},
+		time.UTC,
+	)
+	if !errors.Is(err, ErrorValorDiaInvalido) {
+		t.Fatalf("erro = %v, esperado ErrorValorDiaInvalido", err)
+	}
+}
+
 func TestCalcularUsaMesmaConfiguracaoGlobalEmDatasAntigaEFutura(t *testing.T) {
 	fonte := &calculoFonteFake{
 		valores: map[TipoDia]int64{

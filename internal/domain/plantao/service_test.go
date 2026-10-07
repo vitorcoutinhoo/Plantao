@@ -438,6 +438,22 @@ func TestFecharPlantaoRejeitaRepeticaoEDadosExistentes(t *testing.T) {
 	}
 }
 
+func TestFecharPlantaoAceitaValorTotalZero(t *testing.T) {
+	service, repo := novoServicoFake(StatusPlantaoEmAndamento, roleAdmin, "colaborador-2")
+	repo.tx.valores[financeiro.TipoDiaUtil] = 0
+
+	resultado, err := service.FecharPlantao(context.Background(), "plantao-1", "usuario-1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resultado.Status != StatusPlantaoConcluido || resultado.ValorTotal != 0 {
+		t.Fatalf("resultado inesperado: %+v", resultado)
+	}
+	if !repo.committed || !repo.tx.pagamentoCriado || len(repo.tx.detalhesInseridos) != 1 || repo.tx.detalhesInseridos[0].ValorCentavos != 0 {
+		t.Fatalf("fechamento com zero incompleto: %+v", repo.tx)
+	}
+}
+
 func TestPagarPlantaoAutorizaAdminGerenteEFinanceiro(t *testing.T) {
 	for _, actorRole := range []string{roleAdmin, roleGerente, roleFinanceiro} {
 		t.Run(actorRole, func(t *testing.T) {
@@ -457,6 +473,23 @@ func TestPagarPlantaoAutorizaAdminGerenteEFinanceiro(t *testing.T) {
 				t.Fatal("pagamento não executou todas as etapas")
 			}
 		})
+	}
+}
+
+func TestPagarPlantaoAceitaValorTotalZero(t *testing.T) {
+	service, repo := novoServicoFake(StatusPlantaoConcluido, roleFinanceiro, "colaborador-2")
+	repo.tx.plantao.ValorTotal = 0
+	repo.tx.pagamento = &Pagamento{
+		ID: "pagamento-1", PlantaoID: "plantao-1", ColaboradorID: "colaborador-1",
+		ValorTotalCentavos: 0, Status: statusPagamentoPendente,
+	}
+	repo.tx.resumo = &DetalhesResumo{Quantidade: 1, DatasDistintas: 1, ValorTotalCentavos: 0}
+
+	if err := service.PagarPlantao(context.Background(), "plantao-1", "usuario-1", nil); err != nil {
+		t.Fatal(err)
+	}
+	if !repo.committed || !repo.tx.pagamentoPago || repo.tx.statusAtualizado == nil || *repo.tx.statusAtualizado != StatusPlantaoPago {
+		t.Fatal("pagamento de valor zero não concluiu o fluxo")
 	}
 }
 
