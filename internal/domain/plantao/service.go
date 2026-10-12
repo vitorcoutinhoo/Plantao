@@ -455,11 +455,54 @@ func (s *PlantaoService) GetPlantaoById(ctx context.Context, plantaoID string) (
 	if p == nil {
 		return nil, ErrorPlantaoNotFinded
 	}
+	if err := s.calcularValoresTotaisEmAberto(ctx, []*Plantao{p}); err != nil {
+		return nil, err
+	}
 	return p, nil
 }
 
 func (s *PlantaoService) GetPlantoes(ctx context.Context, filter *Filtro) ([]Plantao, error) {
-	return s.repository.Find(ctx, filter)
+	plantoes, err := s.repository.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	ponteiros := make([]*Plantao, 0, len(plantoes))
+	for i := range plantoes {
+		ponteiros = append(ponteiros, &plantoes[i])
+	}
+	if err := s.calcularValoresTotaisEmAberto(ctx, ponteiros); err != nil {
+		return nil, err
+	}
+	return plantoes, nil
+}
+
+func (s *PlantaoService) calcularValoresTotaisEmAberto(ctx context.Context, plantoes []*Plantao) error {
+	temPlantaoAberto := false
+	for _, p := range plantoes {
+		if p != nil && p.Status != StatusPlantaoConcluido && p.Status != StatusPlantaoPago {
+			temPlantaoAberto = true
+			break
+		}
+	}
+	if !temPlantaoAberto {
+		return nil
+	}
+
+	return s.repository.WithTransaction(ctx, func(tx PlantaoTransaction) error {
+		for _, p := range plantoes {
+			if p == nil || p.Status == StatusPlantaoConcluido || p.Status == StatusPlantaoPago {
+				continue
+			}
+
+			calculo, err := s.calculoService.Calcular(ctx, p.Periodo, tx, s.location)
+			if err != nil {
+				return err
+			}
+			p.ValorTotal = float64(calculo.ValorTotalCentavos) / 100
+		}
+		return nil
+	})
 }
 
 func (s *PlantaoService) GetRelatorio(ctx context.Context, filter *RelatorioFiltro) ([]RelatorioItem, error) {
@@ -477,13 +520,13 @@ func (s *PlantaoService) GetRelatorio(ctx context.Context, filter *RelatorioFilt
 }
 
 func (s *PlantaoService) GetPlantoesByColaboradorId(ctx context.Context, colaboradorID string) ([]Plantao, error) {
-	return s.repository.Find(ctx, &Filtro{ColaboradorID: colaboradorID})
+	return s.GetPlantoes(ctx, &Filtro{ColaboradorID: colaboradorID})
 }
 
 func (s *PlantaoService) GetPlantoesByPeriodo(ctx context.Context, periodo *shared.Periodo) ([]Plantao, error) {
-	return s.repository.Find(ctx, &Filtro{Periodo: periodo})
+	return s.GetPlantoes(ctx, &Filtro{Periodo: periodo})
 }
 
 func (s *PlantaoService) GetPlantoesByStatus(ctx context.Context, status StatusPlantao) ([]Plantao, error) {
-	return s.repository.Find(ctx, &Filtro{Status: &status})
+	return s.GetPlantoes(ctx, &Filtro{Status: &status})
 }
