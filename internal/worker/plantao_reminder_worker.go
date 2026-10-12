@@ -13,7 +13,7 @@ import (
 	"plantao/internal/domain/plantao"
 )
 
-const plantaoReminderInterval = 30 * time.Minute
+const plantaoReminderInterval = 24 * time.Hour
 
 type PlantaoReminderWorker struct {
 	plantoes      plantao.PlantaoRepository
