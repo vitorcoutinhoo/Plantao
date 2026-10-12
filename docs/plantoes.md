@@ -64,6 +64,10 @@ reconsiderados nos ciclos seguintes.
 }
 ```
 
+O cadastro não antecipa o fechamento financeiro: a resposta do `POST` mantém
+`valor_total` em `0`. Nas consultas `GET`, plantões ainda não concluídos têm o
+total calculado com as configurações globais vigentes no momento da leitura.
+
 ### Regra de sobreposição
 
 - plantões de colaboradores diferentes podem ocupar o mesmo período;
@@ -119,6 +123,13 @@ Regras:
 > Retorna todos os plantões
 
 **Response `200`:** array de plantão
+
+Para plantões `agendados`, `em andamento` ou `cancelados`, `valor_total` é
+calculado na consulta, considerando todos os dias civis do período em
+`America/Sao_Paulo`, feriados e os valores globais atuais por tipo de dia.
+Plantões `concluídos` e `pagos` retornam o total persistido no fechamento,
+preservando os valores históricos. A mesma regra vale para as consultas por ID,
+colaborador, status e período.
 
 ---
 
