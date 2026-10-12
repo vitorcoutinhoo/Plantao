@@ -120,14 +120,19 @@ func setupColaboradorRoutes(
 	v1 := router.Group("/api/v1")
 	{
 		colaboradorRoutes := v1.Group("/colaboradores")
-		colaboradorRoutes.Use(authMidware.AuthenticationMiddleware(), midware.RoleMidware(ADMIN_ROLE, GERENTE_ROLE, COLABORADOR_ROLE))
+		colaboradorRoutes.Use(authMidware.AuthenticationMiddleware())
 		{
-			colaboradorRoutes.POST("", colaboradorController.CreateColaborador)
-			colaboradorRoutes.PATCH("/:id", colaboradorController.UpdateColaborador)
-			colaboradorRoutes.PATCH("/:id/foto", colaboradorController.UploadFotoColaborador)
-			colaboradorRoutes.DELETE("/:id", colaboradorController.DisableColaborador)
-			colaboradorRoutes.GET("/:id", colaboradorController.GetColaboradorById)
-			colaboradorRoutes.GET("", colaboradorController.GetColaboradoresByFilter)
+			operationalRoutes := colaboradorRoutes.Group("")
+			operationalRoutes.Use(midware.RoleMidware(ADMIN_ROLE, GERENTE_ROLE, COLABORADOR_ROLE))
+			{
+				operationalRoutes.POST("", colaboradorController.CreateColaborador)
+				operationalRoutes.PATCH("/:id", colaboradorController.UpdateColaborador)
+				operationalRoutes.PATCH("/:id/foto", colaboradorController.UploadFotoColaborador)
+				operationalRoutes.DELETE("/:id", colaboradorController.DisableColaborador)
+				operationalRoutes.GET("/:id", colaboradorController.GetColaboradorById)
+			}
+
+			colaboradorRoutes.GET("", midware.RoleMidware(ADMIN_ROLE, GERENTE_ROLE, COLABORADOR_ROLE, FINANCEIRO_ROLE), colaboradorController.GetColaboradoresByFilter)
 		}
 	}
 }
