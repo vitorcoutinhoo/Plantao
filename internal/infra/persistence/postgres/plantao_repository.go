@@ -345,7 +345,6 @@ func (r *PlantaoRepository) FindRelatorio(ctx context.Context, filtro *plantao.R
 		SELECT colaborador_id, plantao_id, status, data_inicio, data_fim, data,
 		       nome_colaborador, valor_total_relatorio, valor_dia, observacoes
 		FROM relatorio
-		WHERE data BETWEEN $1::date AND $2::date
 		ORDER BY data, nome_colaborador, plantao_id, detalhe_id
 	`
 
