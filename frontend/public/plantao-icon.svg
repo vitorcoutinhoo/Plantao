@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- Círculo principal (Vermelho Intellisys) ocupando todo o espaço -->
+  <circle cx="128" cy="128" r="128" fill="#B5071A"/>
+  
+  <!-- Marcadores do relógio (Branco) ajustados para a nova borda -->
+  <path d="M128 24 L128 48 M232 128 L208 128 M128 232 L128 208 M24 128 L48 128" stroke="#FFFFFF" stroke-width="14" stroke-linecap="round"/>
+  
+  <!-- Texto 24h centralizado e redimensionado -->
+  <text x="128" y="166" font-family="system-ui, -apple-system, sans-serif" font-size="100" font-weight="900" fill="#FFFFFF" text-anchor="middle" letter-spacing="-5">24h</text>
+</svg>

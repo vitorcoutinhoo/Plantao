@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login | Intellisys</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=Montserrat:wght@700&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@300;500&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'intellisys-red': '#B5071A', 
+                        //'intellisys-orange': '#FF8C00', 
+                        'intellisys-gray-form': 'rgba(30, 30, 30, 0.11)',
+                        'intellisys-text': '#1E1E1E',
+                        'intellisys-footer': '#545454'
+                    },
+                    fontFamily: {
+                        ubuntu: ['Ubuntu', 'sans-serif'],
+                        montserrat: ['Montserrat', 'sans-serif'],
+                        inter: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { font-family: 'Inter', sans-serif; margin: 0; padding: 0; }
+        .diagonal-bg {
+            clip-path: polygon(10% 0%, 100% 0%, 100% 100%, 0% 100%);
+        }
+    </style>
+</head>
+<body class="bg-white min-h-screen flex flex-col">
+
+    <header class="relative h-20 flex items-center px-10 border-b overflow-hidden bg-white">
+        <div class="z-10 flex items-center">
+            <h1 class="font-ubuntu text-3xl tracking-tight select-none">
+                <span class="text-black">Intelli</span><span class="text-intellisys-red">Files</span>
+            </h1>
+        </div>
+        <div class="absolute right-0 top-0 h-full w-2/3 bg-intellisys-red diagonal-bg hidden md:block"></div>
+    </header>
+
+    <main class="flex-grow flex flex-col items-center justify-center px-4 py-10">
+        <div class="text-center mb-8">
+            <h1 class="text-2xl md:text-3xl font-bold text-intellisys-text font-montserrat">
+                Acesse a Àrea do<span class="text-intellisys-red"> Cliente</span>
+            </h1>
+            <p class="text-gray-500 text-sm mt-2 font-inter">
+                Repositório de arquivos da Intellisys.
+            </p>
+        </div>
+
+        <div class="bg-intellisys-gray-form p-8 md:p-10 rounded-[2rem] shadow-sm w-full max-w-[450px]">
+            <form action="#" method="POST" class="space-y-6">
+                <div class="flex flex-col gap-2">
+                    <label for="login" class="text-sm font-semibold text-intellisys-text">E-mail</label>
+                    <input 
+                        disabled
+                        type="text" 
+                        id="login"
+                        class="w-full p-3 bg-white rounded-lg outline-none focus:ring-2 focus:ring-intellisys-red transition-all border-none"
+                    >
+                </div>
+
+                <div class="flex flex-col gap-2 relative">
+                    <label for="password" class="text-sm font-semibold text-intellisys-text">Senha</label>
+                    <div class="relative">
+                        <input 
+                            disabled
+                            type="password" 
+                            id="password"
+                            class="w-full p-3 bg-white rounded-lg outline-none focus:ring-2 focus:ring-intellisys-red transition-all border-none"
+                        >
+                        <span class="absolute right-4 top-1/2 -translate-y-1/2 cursor-pointer text-gray-400">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                        </span>
+                    </div>
+                </div>
+
+                <div class="flex flex-col gap-2 relative">
+                    <label for="password" class="text-sm font-semibold text-intellisys-text">Empresa</label>
+                    <div class="relative">
+                        <input 
+                            disabled
+                            type="password" 
+                            id="password"
+                            class="w-full p-2 bg-white rounded-lg outline-none focus:ring-2 focus:ring-intellisys-red transition-all border-none"
+                        >
+                        
+                    </div>
+                </div>                
+
+                <div class="flex justify-center pt-2">
+                    <button 
+                        disabled
+                        type="submit"
+                        class="bg-intellisys-red text-white px-14 py-3 rounded-xl font-bold hover:opacity-90 transition-all active:scale-95 shadow-lg font-inter uppercase tracking-wider"
+                    >
+                        Entrar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </main>
+
+    <footer class="bg-intellisys-footer text-white py-6 text-center text-xs md:text-sm font-inter">
+        Intellisys Informática Ltda / Todos os direitos reservados (c) 2026
+    </footer>
+
+</body>
+</html>
