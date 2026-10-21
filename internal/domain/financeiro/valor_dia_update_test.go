@@ -102,8 +102,18 @@ func TestSetValorCriaConfiguracaoGlobal(t *testing.T) {
 	}
 }
 
+func TestSetValorAceitaZero(t *testing.T) {
+	repo := &valorDiaRepositoryFake{}
+	resultado, err := serviceValorDiaTeste(repo).SetValor(context.Background(), TipoDiaUtil, 0, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if repo.stored == nil || resultado.Valor != 0 || repo.stored.Valor != 0 {
+		t.Fatalf("valor zero não foi persistido: resultado=%+v armazenado=%+v", resultado, repo.stored)
+	}
+}
+
 func TestSetValorValidaEntradaEPropagaDuplicidade(t *testing.T) {
-	zero := 0.0
 	negativo := -1.0
 	precisaoInvalida := 10.001
 	limiteExcedido := 100_000_000.0
@@ -115,7 +125,6 @@ func TestSetValorValidaEntradaEPropagaDuplicidade(t *testing.T) {
 		esperado error
 	}{
 		{"tipo inválido", TipoDia("INVALIDO"), 10, nil, ErrorTipoDiaInvalido},
-		{"valor zero", TipoDiaUtil, zero, nil, ErrorValorDiaInvalido},
 		{"valor negativo", TipoDiaUtil, negativo, nil, ErrorValorDiaInvalido},
 		{"precisão inválida", TipoDiaUtil, precisaoInvalida, nil, ErrorPrecisaoValorDia},
 		{"limite excedido", TipoDiaUtil, limiteExcedido, nil, ErrorLimiteValorDia},
@@ -180,8 +189,21 @@ func TestUpdatePermiteLimparDescricao(t *testing.T) {
 	}
 }
 
+func TestUpdateAceitaZero(t *testing.T) {
+	repo := &valorDiaRepositoryFake{atual: configGlobalTeste()}
+	zero := 0.0
+	resultado, err := serviceValorDiaTeste(repo).Update(context.Background(), TipoDiaUtil, &AtualizacaoValorDia{Valor: &zero})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !repo.committed || resultado.Valor != 0 {
+		t.Fatalf("valor zero não foi atualizado: %+v", resultado)
+	}
+}
+
 func TestUpdateValidaEntrada(t *testing.T) {
 	zero := 0.0
+	negativo := -1.0
 	precisaoInvalida := 10.001
 	tests := []struct {
 		nome        string
@@ -192,7 +214,7 @@ func TestUpdateValidaEntrada(t *testing.T) {
 	}{
 		{"tipo inválido", TipoDia("INVALIDO"), configGlobalTeste(), &AtualizacaoValorDia{Valor: &zero}, ErrorTipoDiaInvalido},
 		{"patch vazio", TipoDiaUtil, configGlobalTeste(), &AtualizacaoValorDia{}, ErrorAtualizacaoVazia},
-		{"valor zero", TipoDiaUtil, configGlobalTeste(), &AtualizacaoValorDia{Valor: &zero}, ErrorValorDiaInvalido},
+		{"valor negativo", TipoDiaUtil, configGlobalTeste(), &AtualizacaoValorDia{Valor: &negativo}, ErrorValorDiaInvalido},
 		{"precisão inválida", TipoDiaUtil, configGlobalTeste(), &AtualizacaoValorDia{Valor: &precisaoInvalida}, ErrorPrecisaoValorDia},
 		{"configuração ausente", TipoDiaUtil, nil, &AtualizacaoValorDia{DescricaoInformada: true}, ErrorValorDiaNotFound},
 	}

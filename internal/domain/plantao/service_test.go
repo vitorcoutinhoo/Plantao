@@ -29,6 +29,9 @@ type repositoryFake struct {
 	committed       bool
 	stored          *Plantao
 	storeErr        error
+	plantoes        []Plantao
+	filtro          *Filtro
+	findErr         error
 	relatorio       []RelatorioItem
 	relatorioFiltro *RelatorioFiltro
 	relatorioErr    error
@@ -46,7 +49,13 @@ func (r *repositoryFake) Delete(context.Context, string) error   { return nil }
 func (r *repositoryFake) FindById(context.Context, string) (*Plantao, error) {
 	return r.tx.plantao, nil
 }
-func (r *repositoryFake) Find(context.Context, *Filtro) ([]Plantao, error) { return nil, nil }
+func (r *repositoryFake) Find(_ context.Context, filtro *Filtro) ([]Plantao, error) {
+	r.filtro = filtro
+	if r.findErr != nil {
+		return nil, r.findErr
+	}
+	return r.plantoes, nil
+}
 func (r *repositoryFake) FindRelatorio(_ context.Context, filtro *RelatorioFiltro) ([]RelatorioItem, error) {
 	r.relatorioFiltro = filtro
 	return r.relatorio, r.relatorioErr
@@ -213,12 +222,12 @@ func novoServicoFake(status StatusPlantao, role, actorColaborador string) (*Plan
 		},
 	}
 	repo := &repositoryFake{tx: tx}
-	return NewPlantaoService(repo, financeiro.NewCalculoService(testLogger{}), testLogger{}), repo
+	return NewPlantaoService(repo, nil, nil, financeiro.NewCalculoService(testLogger{}), testLogger{}), repo
 }
 
 func TestCreatePlantaoDelegaCriacaoAtomicaAoRepositorio(t *testing.T) {
 	repo := &repositoryFake{}
-	service := NewPlantaoService(repo, nil, testLogger{})
+	service := NewPlantaoService(repo, nil, nil, nil, testLogger{})
 	periodo := &shared.Periodo{
 		Inicio: time.Date(2026, 9, 1, 8, 0, 0, 0, time.UTC),
 		Fim:    time.Date(2026, 9, 1, 18, 0, 0, 0, time.UTC),
@@ -235,7 +244,7 @@ func TestCreatePlantaoDelegaCriacaoAtomicaAoRepositorio(t *testing.T) {
 
 func TestCreatePlantaoPropagaConflitoSemCriacao(t *testing.T) {
 	repo := &repositoryFake{storeErr: ErrorExistingPlantao}
-	service := NewPlantaoService(repo, nil, testLogger{})
+	service := NewPlantaoService(repo, nil, nil, nil, testLogger{})
 	periodo := &shared.Periodo{
 		Inicio: time.Date(2026, 9, 1, 8, 0, 0, 0, time.UTC),
 		Fim:    time.Date(2026, 9, 1, 18, 0, 0, 0, time.UTC),
@@ -310,6 +319,7 @@ func TestEditarPlantaoAutorizaAdminEGerente(t *testing.T) {
 		{roleAdmin, nil},
 		{roleGerente, nil},
 		{roleColaborador, ErrorUsuarioSemPermissao},
+		{roleFinanceiro, ErrorUsuarioSemPermissao},
 	} {
 		t.Run(tt.role, func(t *testing.T) {
 			service, repo := novoServicoFake(StatusPlantaoAgendado, tt.role, "colaborador-1")
@@ -398,6 +408,7 @@ func TestFecharPlantaoAutorizacaoEAtomicidade(t *testing.T) {
 		{"outro colaborador", roleColaborador, "colaborador-2", ErrorUsuarioSemPermissao},
 		{"gerente", roleGerente, "colaborador-2", nil},
 		{"admin", roleAdmin, "colaborador-2", nil},
+		{"financeiro", roleFinanceiro, "colaborador-2", ErrorUsuarioSemPermissao},
 	}
 
 	for _, tt := range tests {
@@ -436,21 +447,58 @@ func TestFecharPlantaoRejeitaRepeticaoEDadosExistentes(t *testing.T) {
 	}
 }
 
-func TestPagarPlantao(t *testing.T) {
-	service, repo := novoServicoFake(StatusPlantaoConcluido, roleGerente, "colaborador-2")
-	repo.tx.plantao.ValorTotal = 100
+func TestFecharPlantaoAceitaValorTotalZero(t *testing.T) {
+	service, repo := novoServicoFake(StatusPlantaoEmAndamento, roleAdmin, "colaborador-2")
+	repo.tx.valores[financeiro.TipoDiaUtil] = 0
+
+	resultado, err := service.FecharPlantao(context.Background(), "plantao-1", "usuario-1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resultado.Status != StatusPlantaoConcluido || resultado.ValorTotal != 0 {
+		t.Fatalf("resultado inesperado: %+v", resultado)
+	}
+	if !repo.committed || !repo.tx.pagamentoCriado || len(repo.tx.detalhesInseridos) != 1 || repo.tx.detalhesInseridos[0].ValorCentavos != 0 {
+		t.Fatalf("fechamento com zero incompleto: %+v", repo.tx)
+	}
+}
+
+func TestPagarPlantaoAutorizaAdminGerenteEFinanceiro(t *testing.T) {
+	for _, actorRole := range []string{roleAdmin, roleGerente, roleFinanceiro} {
+		t.Run(actorRole, func(t *testing.T) {
+			service, repo := novoServicoFake(StatusPlantaoConcluido, actorRole, "colaborador-2")
+			repo.tx.plantao.ValorTotal = 100
+			repo.tx.pagamento = &Pagamento{
+				ID: "pagamento-1", PlantaoID: "plantao-1", ColaboradorID: "colaborador-1",
+				ValorTotalCentavos: 10000, Status: statusPagamentoPendente,
+			}
+			repo.tx.resumo = &DetalhesResumo{Quantidade: 1, DatasDistintas: 1, ValorTotalCentavos: 10000}
+
+			if err := service.PagarPlantao(context.Background(), "plantao-1", "usuario-1", nil); err != nil {
+				t.Fatal(err)
+			}
+			if !repo.committed || !repo.tx.pagamentoPago || repo.tx.statusAtualizado == nil ||
+				*repo.tx.statusAtualizado != StatusPlantaoPago || repo.tx.historicos != 1 {
+				t.Fatal("pagamento não executou todas as etapas")
+			}
+		})
+	}
+}
+
+func TestPagarPlantaoAceitaValorTotalZero(t *testing.T) {
+	service, repo := novoServicoFake(StatusPlantaoConcluido, roleFinanceiro, "colaborador-2")
+	repo.tx.plantao.ValorTotal = 0
 	repo.tx.pagamento = &Pagamento{
 		ID: "pagamento-1", PlantaoID: "plantao-1", ColaboradorID: "colaborador-1",
-		ValorTotalCentavos: 10000, Status: statusPagamentoPendente,
+		ValorTotalCentavos: 0, Status: statusPagamentoPendente,
 	}
-	repo.tx.resumo = &DetalhesResumo{Quantidade: 1, DatasDistintas: 1, ValorTotalCentavos: 10000}
+	repo.tx.resumo = &DetalhesResumo{Quantidade: 1, DatasDistintas: 1, ValorTotalCentavos: 0}
 
 	if err := service.PagarPlantao(context.Background(), "plantao-1", "usuario-1", nil); err != nil {
 		t.Fatal(err)
 	}
-	if !repo.committed || !repo.tx.pagamentoPago || repo.tx.statusAtualizado == nil ||
-		*repo.tx.statusAtualizado != StatusPlantaoPago || repo.tx.historicos != 1 {
-		t.Fatal("pagamento não executou todas as etapas")
+	if !repo.committed || !repo.tx.pagamentoPago || repo.tx.statusAtualizado == nil || *repo.tx.statusAtualizado != StatusPlantaoPago {
+		t.Fatal("pagamento de valor zero não concluiu o fluxo")
 	}
 }
 
@@ -544,6 +592,122 @@ func TestIniciarPlantoesAgendadosFazRollbackSeHistoricoFalhar(t *testing.T) {
 	}
 	if repo.committed {
 		t.Fatal("transação com falha foi confirmada")
+	}
+}
+
+func TestConsultasDePlantaoCalculamValorTotalEmAberto(t *testing.T) {
+	periodo := &shared.Periodo{
+		Inicio: time.Date(2026, 7, 6, 8, 0, 0, 0, time.UTC),
+		Fim:    time.Date(2026, 7, 6, 18, 0, 0, 0, time.UTC),
+	}
+
+	tests := []struct {
+		nome          string
+		consultar     func(*PlantaoService, *repositoryFake) ([]Plantao, error)
+		validarFiltro func(*testing.T, *Filtro)
+	}{
+		{
+			nome: "listagem geral",
+			consultar: func(s *PlantaoService, _ *repositoryFake) ([]Plantao, error) {
+				return s.GetPlantoes(context.Background(), &Filtro{})
+			},
+			validarFiltro: func(t *testing.T, filtro *Filtro) {
+				if filtro == nil || filtro.ColaboradorID != "" || filtro.Periodo != nil || filtro.Status != nil {
+					t.Fatalf("filtro geral incorreto: %+v", filtro)
+				}
+			},
+		},
+		{
+			nome: "por colaborador",
+			consultar: func(s *PlantaoService, _ *repositoryFake) ([]Plantao, error) {
+				return s.GetPlantoesByColaboradorId(context.Background(), "colaborador-1")
+			},
+			validarFiltro: func(t *testing.T, filtro *Filtro) {
+				if filtro == nil || filtro.ColaboradorID != "colaborador-1" {
+					t.Fatalf("filtro por colaborador incorreto: %+v", filtro)
+				}
+			},
+		},
+		{
+			nome: "por período",
+			consultar: func(s *PlantaoService, _ *repositoryFake) ([]Plantao, error) {
+				return s.GetPlantoesByPeriodo(context.Background(), periodo)
+			},
+			validarFiltro: func(t *testing.T, filtro *Filtro) {
+				if filtro == nil || filtro.Periodo != periodo {
+					t.Fatalf("filtro por período incorreto: %+v", filtro)
+				}
+			},
+		},
+		{
+			nome: "por status",
+			consultar: func(s *PlantaoService, _ *repositoryFake) ([]Plantao, error) {
+				return s.GetPlantoesByStatus(context.Background(), StatusPlantaoAgendado)
+			},
+			validarFiltro: func(t *testing.T, filtro *Filtro) {
+				if filtro == nil || filtro.Status == nil || *filtro.Status != StatusPlantaoAgendado {
+					t.Fatalf("filtro por status incorreto: %+v", filtro)
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.nome, func(t *testing.T) {
+			service, repo := novoServicoFake(StatusPlantaoAgendado, roleAdmin, "colaborador-1")
+			repo.plantoes = []Plantao{*plantaoDeTeste(StatusPlantaoAgendado)}
+			resultado, err := tt.consultar(service, repo)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(resultado) != 1 || resultado[0].ValorTotal != 100 {
+				t.Fatalf("valor calculado inesperado: %+v", resultado)
+			}
+			tt.validarFiltro(t, repo.filtro)
+		})
+	}
+}
+
+func TestGetPlantaoByIdRecalculaAbertosEPreservaFechados(t *testing.T) {
+	service, repo := novoServicoFake(StatusPlantaoAgendado, roleAdmin, "colaborador-1")
+
+	primeiraLeitura, err := service.GetPlantaoById(context.Background(), "plantao-1")
+	if err != nil || primeiraLeitura.ValorTotal != 100 {
+		t.Fatalf("primeira leitura = %+v, erro = %v", primeiraLeitura, err)
+	}
+	repo.tx.valores[financeiro.TipoDiaUtil] = 12500
+	segundaLeitura, err := service.GetPlantaoById(context.Background(), "plantao-1")
+	if err != nil || segundaLeitura.ValorTotal != 125 {
+		t.Fatalf("segunda leitura = %+v, erro = %v", segundaLeitura, err)
+	}
+
+	for _, status := range []StatusPlantao{StatusPlantaoConcluido, StatusPlantaoPago} {
+		t.Run(fmt.Sprintf("status %d", status), func(t *testing.T) {
+			service, repo := novoServicoFake(status, roleAdmin, "colaborador-1")
+			repo.tx.plantao.ValorTotal = 0
+			repo.tx.valores[financeiro.TipoDiaUtil] = 12500
+
+			resultado, err := service.GetPlantaoById(context.Background(), "plantao-1")
+			if err != nil || resultado.ValorTotal != 0 {
+				t.Fatalf("resultado = %+v, erro = %v", resultado, err)
+			}
+		})
+	}
+
+	service, repo = novoServicoFake(StatusPlantaoCancelado, roleAdmin, "colaborador-1")
+	resultado, err := service.GetPlantaoById(context.Background(), "plantao-1")
+	if err != nil || resultado.ValorTotal != 100 {
+		t.Fatalf("plantão cancelado = %+v, erro = %v", resultado, err)
+	}
+}
+
+func TestConsultasDePlantaoPropagamErroDeConfiguracaoDeValor(t *testing.T) {
+	service, repo := novoServicoFake(StatusPlantaoAgendado, roleAdmin, "colaborador-1")
+	delete(repo.tx.valores, financeiro.TipoDiaUtil)
+
+	_, err := service.GetPlantaoById(context.Background(), "plantao-1")
+	if !errors.Is(err, financeiro.ErrorValorDiaNotFound) {
+		t.Fatalf("erro = %v, esperado configuração de valor ausente", err)
 	}
 }
 

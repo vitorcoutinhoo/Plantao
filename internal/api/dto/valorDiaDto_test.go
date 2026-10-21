@@ -4,7 +4,44 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/gin-gonic/gin/binding"
 )
+
+func TestSetValorDiaRequestAceitaZeroEMantemValorObrigatorio(t *testing.T) {
+	tests := []struct {
+		nome      string
+		body      string
+		querErro  bool
+		querValor float64
+	}{
+		{nome: "zero", body: `{"tipo_dia":"UTIL","valor":0}`, querValor: 0},
+		{nome: "positivo", body: `{"tipo_dia":"UTIL","valor":100}`, querValor: 100},
+		{nome: "omitido", body: `{"tipo_dia":"UTIL"}`, querErro: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.nome, func(t *testing.T) {
+			var req SetValorDiaRequest
+			if err := json.Unmarshal([]byte(tt.body), &req); err != nil {
+				t.Fatal(err)
+			}
+			err := binding.Validator.ValidateStruct(req)
+			if tt.querErro {
+				if err == nil {
+					t.Fatal("valor omitido deveria ser rejeitado")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("valor válido foi rejeitado: %v", err)
+			}
+			if req.Valor == nil || *req.Valor != tt.querValor {
+				t.Fatalf("valor não foi preservado: %+v", req.Valor)
+			}
+		})
+	}
+}
 
 func TestUpdateValorDiaRequestDistingueOmitidoDeNull(t *testing.T) {
 	var omitido UpdateValorDiaRequest

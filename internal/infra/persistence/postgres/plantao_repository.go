@@ -345,7 +345,6 @@ func (r *PlantaoRepository) FindRelatorio(ctx context.Context, filtro *plantao.R
 		SELECT colaborador_id, plantao_id, status, data_inicio, data_fim, data,
 		       nome_colaborador, valor_total_relatorio, valor_dia, observacoes
 		FROM relatorio
-		WHERE data BETWEEN $1::date AND $2::date
 		ORDER BY data, nome_colaborador, plantao_id, detalhe_id
 	`
 
@@ -603,7 +602,7 @@ func (t *plantaoTransaction) FindValorDiaCentavos(ctx context.Context, tipoDia f
 	const query = `
 		SELECT
 			CASE
-				WHEN valor > 0 AND valor = ROUND(valor, 2) THEN (valor * 100)::bigint
+				WHEN valor >= 0 AND valor = ROUND(valor, 2) THEN (valor * 100)::bigint
 				ELSE NULL
 			END
 		FROM config_valores_dia
@@ -619,7 +618,7 @@ func (t *plantaoTransaction) FindValorDiaCentavos(ctx context.Context, tipoDia f
 		return 0, err
 	}
 
-	if centavos == nil || *centavos <= 0 {
+	if centavos == nil || *centavos < 0 {
 		return 0, financeiro.ErrorValorDiaInvalido
 	}
 	return *centavos, nil

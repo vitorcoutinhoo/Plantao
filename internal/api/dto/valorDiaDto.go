@@ -8,7 +8,7 @@ import (
 
 type SetValorDiaRequest struct {
 	TipoDia        string          `json:"tipo_dia" binding:"required"`
-	Valor          float64         `json:"valor" binding:"required"`
+	Valor          *float64        `json:"valor" binding:"required"`
 	Descricao      *string         `json:"descricao"`
 	VigenciaInicio json.RawMessage `json:"vigencia_inicio"`
 	VigenciaFim    json.RawMessage `json:"vigencia_fim"`

@@ -3,6 +3,7 @@ package colaborador
 import (
 	"errors"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -19,27 +20,7 @@ const (
 
 type CargoColaborador string
 
-const (
-	CargoAnalista               CargoColaborador = "Analista"
-	CargoGerente                CargoColaborador = "Gerente"
-	CargoConsultor              CargoColaborador = "Consultor"
-	CargoTecnico                CargoColaborador = "Técnico"
-	CargoOutro                  CargoColaborador = "Outro"
-	CargoDesenvolvedorFrontend  CargoColaborador = "Desenvolvedor Frontend"
-	CargoDesenvolvedorBackend   CargoColaborador = "Desenvolvedor Backend"
-	CargoDesenvolvedorFullstack CargoColaborador = "Desenvolvedor Fullstack"
-)
-
 type SetorColaborador string
-
-const (
-	SetorTI              SetorColaborador = "TI"
-	SetorRH              SetorColaborador = "RH"
-	SetorFinanceiro      SetorColaborador = "Financeiro"
-	SetorSuporte         SetorColaborador = "Suporte"
-	SetorDesenvolvimento SetorColaborador = "Desenvolvimento"
-	SetorDiretoria       SetorColaborador = "Diretoria"
-)
 
 // Estrutura do domínio Colaborador
 type Colaborador struct {
@@ -59,14 +40,15 @@ type Colaborador struct {
 
 // Erros específicos do domínio Colaborador
 var (
-	ErrorColaboradorNotFound = errors.New("Colaborador não encontrado!")
-	ErrorInvalidEmail        = errors.New("Email Inválido!")
-	ErrorEmailAlreadyExists  = errors.New("Email já existe!")
-	ErrorInvalidTelefone     = errors.New("Telefone Inválido!")
-	ErrorInvalidStatus       = errors.New("Status Inválido!")
-	ErrorInactiveColaborador = errors.New("Colaborador inativo!")
-	ErrorInvalidCargo        = errors.New("Cargo inválido!")
-	ErrorInvalidSetor        = errors.New("Setor inválido!")
+	ErrorColaboradorNotFound   = errors.New("Colaborador não encontrado!")
+	ErrorInvalidEmail          = errors.New("Email Inválido!")
+	ErrorEmailAlreadyExists    = errors.New("Email já existe!")
+	ErrorTelefoneAlreadyExists = errors.New("Telefone já está cadastrado para outro colaborador!")
+	ErrorInvalidTelefone       = errors.New("Telefone Inválido!")
+	ErrorInvalidStatus         = errors.New("Status Inválido!")
+	ErrorInactiveColaborador   = errors.New("Colaborador inativo!")
+	ErrorInvalidCargo          = errors.New("Cargo inválido!")
+	ErrorInvalidSetor          = errors.New("Setor inválido!")
 )
 
 // Cria um novo colaborador com validações básicas
@@ -87,11 +69,11 @@ func NewColaborador(nome, email, telefone, foto string, dataAdmissao, dataDeslig
 		return nil, ErrorInvalidStatus
 	}
 
-	if !isCargoValid(string(cargo)) {
+	if strings.TrimSpace(string(cargo)) == "" {
 		return nil, ErrorInvalidCargo
 	}
 
-	if !isSetorValid(string(setor)) {
+	if strings.TrimSpace(string(setor)) == "" {
 		return nil, ErrorInvalidSetor
 	}
 
@@ -197,21 +179,3 @@ func isTelefoneValid(telefone string) bool {
 
 	return phoneRegexBR.MatchString(telefone)
 } // Fim isTelefoneValid
-
-func isCargoValid(cargo string) bool {
-	switch cargo {
-	case string(CargoAnalista), string(CargoGerente), string(CargoConsultor), string(CargoTecnico), string(CargoOutro), string(CargoDesenvolvedorFrontend), string(CargoDesenvolvedorBackend), string(CargoDesenvolvedorFullstack):
-		return true
-	default:
-		return false
-	}
-}
-
-func isSetorValid(setor string) bool {
-	switch setor {
-	case string(SetorTI), string(SetorRH), string(SetorFinanceiro), string(SetorSuporte), string(SetorDesenvolvimento), string(SetorDiretoria):
-		return true
-	default:
-		return false
-	}
-}

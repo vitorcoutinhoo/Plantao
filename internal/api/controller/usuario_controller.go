@@ -30,7 +30,7 @@ func (c *UsuarioController) CreateUsuarioByToken(ctx *gin.Context) {
 
 	var req dto.CadastroByTokenRequestDTO
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		ctx.JSON(http.StatusBadRequest, apierr.ErrorResponse{Code: "BAD_REQUEST", Message: err.Error()})
+		apierr.RespondBinding(ctx, err)
 		return
 	}
 
@@ -58,7 +58,7 @@ func (c *UsuarioController) UpdateUsuario(ctx *gin.Context) {
 
 	var req dto.UsuarioRequestDTO
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		ctx.JSON(http.StatusBadRequest, apierr.ErrorResponse{Code: "BAD_REQUEST", Message: err.Error()})
+		apierr.RespondBinding(ctx, err)
 		return
 	}
 
@@ -131,11 +131,11 @@ func (c *UsuarioController) UpdateRole(ctx *gin.Context) {
 	id := ctx.Param("id")
 
 	var req struct {
-		Role string `json:"role" binding:"required,oneof=admin gerente colaborador"`
+		Role string `json:"role" binding:"required,oneof=admin gerente colaborador financeiro"`
 	}
 
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		ctx.JSON(http.StatusBadRequest, apierr.ErrorResponse{Code: "BAD_REQUEST", Message: err.Error()})
+		apierr.RespondBinding(ctx, err)
 		return
 	}
 

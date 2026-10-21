@@ -4,7 +4,7 @@
 
 **Autenticação:** cookie `access_token`
 
-> Todos os endpoints exigem autenticação e role `admin`.
+> Todos os endpoints exigem autenticação e uma das roles: `admin`, `financeiro`.
 
 **Tipos de dia:** `UTIL`, `SABADO`, `DOMINGO`, `FERIADO`
 
@@ -97,7 +97,7 @@ Regras:
 
 - somente `valor` e `descricao` são aceitos;
 - `vigencia_inicio` e `vigencia_fim` retornam `400 Bad Request`;
-- o valor deve ser positivo e possuir no máximo duas casas decimais;
+- o valor deve ser maior ou igual a zero e possuir no máximo duas casas decimais;
 - corpo vazio retorna `400 Bad Request`;
 - tipo inexistente retorna `404 Not Found`;
 - atualização concorrente retorna `409 Conflict`;

@@ -16,6 +16,7 @@ const (
 	ADMIN_ROLE       = "admin"
 	COLABORADOR_ROLE = "colaborador"
 	GERENTE_ROLE     = "gerente"
+	FINANCEIRO_ROLE  = "financeiro"
 )
 
 func NewRouter(
@@ -35,6 +36,7 @@ func NewRouter(
 	cargoController *controller.CargoController,
 	setorController *controller.SetorController,
 	roleController *controller.RoleController,
+	smtpController *controller.SMTPController,
 ) *gin.Engine {
 	router := gin.Default()
 
@@ -62,8 +64,20 @@ func NewRouter(
 	setupCargoRoutes(router, cargoController, authMidware)
 	setupSetorRoutes(router, setorController, authMidware)
 	setupRoleRoutes(router, roleController)
+	setupSMTPRoutes(router, smtpController, authMidware)
 
 	return router
+}
+
+func setupSMTPRoutes(router *gin.Engine, smtpController *controller.SMTPController, authMidware *midware.AuthMidware) {
+	v1 := router.Group("/api/v1")
+	smtpRoutes := v1.Group("/admin/config-smtp")
+	smtpRoutes.Use(authMidware.AuthenticationMiddleware(), midware.RoleMidware(ADMIN_ROLE))
+	{
+		smtpRoutes.GET("", smtpController.Get)
+		smtpRoutes.POST("", smtpController.Create)
+		smtpRoutes.PATCH("", smtpController.Update)
+	}
 }
 
 func setupPlantaoRoutes(
@@ -74,21 +88,26 @@ func setupPlantaoRoutes(
 	v1 := router.Group("/api/v1")
 	{
 		plantaoRoutes := v1.Group("/plantoes")
-		plantaoRoutes.Use(authMidware.AuthenticationMiddleware(), midware.RoleMidware(ADMIN_ROLE, GERENTE_ROLE, COLABORADOR_ROLE))
+		plantaoRoutes.Use(authMidware.AuthenticationMiddleware())
 		{
-			plantaoRoutes.POST("", plantaoController.CreatePlantao)
-			plantaoRoutes.PATCH("/:id", midware.RoleMidware(ADMIN_ROLE, GERENTE_ROLE), plantaoController.UpdatePlantao)
-			plantaoRoutes.GET("", plantaoController.GetPlantoes)
-			plantaoRoutes.GET("/relatorio", midware.RoleMidware(ADMIN_ROLE, GERENTE_ROLE), plantaoController.GetRelatorio)
-			plantaoRoutes.GET("/:id", plantaoController.GetPlantaoById)
-			plantaoRoutes.DELETE("/:id", plantaoController.DeletePlantao)
+			operationalRoutes := plantaoRoutes.Group("")
+			operationalRoutes.Use(midware.RoleMidware(ADMIN_ROLE, GERENTE_ROLE, COLABORADOR_ROLE))
+			{
+				operationalRoutes.POST("", plantaoController.CreatePlantao)
+				operationalRoutes.PATCH("/:id", midware.RoleMidware(ADMIN_ROLE, GERENTE_ROLE), plantaoController.UpdatePlantao)
+				operationalRoutes.GET("", plantaoController.GetPlantoes)
+				operationalRoutes.GET("/:id", plantaoController.GetPlantaoById)
+				operationalRoutes.DELETE("/:id", plantaoController.DeletePlantao)
 
-			plantaoRoutes.GET("/colaborador/:colaborador_id", plantaoController.GetPlantoesByColaboradorId)
-			plantaoRoutes.GET("/status/:status", plantaoController.GetPlantoesByStatus)
-			plantaoRoutes.GET("/periodo/:start_date/:end_date", plantaoController.GetPlantoesByPeriodo)
+				operationalRoutes.GET("/colaborador/:colaborador_id", plantaoController.GetPlantoesByColaboradorId)
+				operationalRoutes.GET("/status/:status", plantaoController.GetPlantoesByStatus)
+				operationalRoutes.GET("/periodo/:start_date/:end_date", plantaoController.GetPlantoesByPeriodo)
 
-			plantaoRoutes.PATCH("/:id/status", plantaoController.UpdateStatusPlantao)
-			plantaoRoutes.POST("/:id/pagamento", midware.RoleMidware(ADMIN_ROLE, GERENTE_ROLE), plantaoController.PagarPlantao)
+				operationalRoutes.PATCH("/:id/status", plantaoController.UpdateStatusPlantao)
+			}
+
+			plantaoRoutes.GET("/relatorio", midware.RoleMidware(ADMIN_ROLE, GERENTE_ROLE, FINANCEIRO_ROLE), plantaoController.GetRelatorio)
+			plantaoRoutes.POST("/:id/pagamento", midware.RoleMidware(ADMIN_ROLE, GERENTE_ROLE, FINANCEIRO_ROLE), plantaoController.PagarPlantao)
 		}
 	}
 }
@@ -101,14 +120,19 @@ func setupColaboradorRoutes(
 	v1 := router.Group("/api/v1")
 	{
 		colaboradorRoutes := v1.Group("/colaboradores")
-		colaboradorRoutes.Use(authMidware.AuthenticationMiddleware(), midware.RoleMidware(ADMIN_ROLE, GERENTE_ROLE, COLABORADOR_ROLE))
+		colaboradorRoutes.Use(authMidware.AuthenticationMiddleware())
 		{
-			colaboradorRoutes.POST("", colaboradorController.CreateColaborador)
-			colaboradorRoutes.PATCH("/:id", colaboradorController.UpdateColaborador)
-			colaboradorRoutes.PATCH("/:id/foto", colaboradorController.UploadFotoColaborador)
-			colaboradorRoutes.DELETE("/:id", colaboradorController.DisableColaborador)
-			colaboradorRoutes.GET("/:id", colaboradorController.GetColaboradorById)
-			colaboradorRoutes.GET("", colaboradorController.GetColaboradoresByFilter)
+			operationalRoutes := colaboradorRoutes.Group("")
+			operationalRoutes.Use(midware.RoleMidware(ADMIN_ROLE, GERENTE_ROLE, COLABORADOR_ROLE))
+			{
+				operationalRoutes.POST("", colaboradorController.CreateColaborador)
+				operationalRoutes.PATCH("/:id", colaboradorController.UpdateColaborador)
+				operationalRoutes.PATCH("/:id/foto", colaboradorController.UploadFotoColaborador)
+				operationalRoutes.DELETE("/:id", colaboradorController.DisableColaborador)
+				operationalRoutes.GET("/:id", colaboradorController.GetColaboradorById)
+			}
+
+			colaboradorRoutes.GET("", midware.RoleMidware(ADMIN_ROLE, GERENTE_ROLE, COLABORADOR_ROLE, FINANCEIRO_ROLE), colaboradorController.GetColaboradoresByFilter)
 		}
 	}
 }
@@ -138,7 +162,7 @@ func setupValorDiaRoutes(
 	v1 := router.Group("/api/v1")
 	{
 		valorDiaRoutes := v1.Group("/admin/config-valores")
-		valorDiaRoutes.Use(authMidware.AuthenticationMiddleware(), midware.RoleMidware(ADMIN_ROLE))
+		valorDiaRoutes.Use(authMidware.AuthenticationMiddleware(), midware.RoleMidware(ADMIN_ROLE, FINANCEIRO_ROLE))
 		{
 			valorDiaRoutes.GET("", valorDiaController.GetAll)
 			valorDiaRoutes.POST("", valorDiaController.SetValor)
@@ -156,7 +180,7 @@ func setupFeriadoRoutes(
 	v1 := router.Group("/api/v1")
 	{
 		feriadoRoutes := v1.Group("/admin/feriados")
-		feriadoRoutes.Use(authMidware.AuthenticationMiddleware(), midware.RoleMidware(ADMIN_ROLE))
+		feriadoRoutes.Use(authMidware.AuthenticationMiddleware(), midware.RoleMidware(ADMIN_ROLE, FINANCEIRO_ROLE))
 		{
 			feriadoRoutes.GET("", feriadoController.GetFeriadosByAno)
 			feriadoRoutes.PATCH("/:id/data", feriadoController.UpdateDataFeriado)
@@ -179,7 +203,7 @@ func setupUsuarioRoutes(
 		}
 
 		usuarioAuthRoutes := v1.Group("/authenticated/usuarios")
-		usuarioAuthRoutes.Use(authMidware.AuthenticationMiddleware(), midware.RoleMidware(COLABORADOR_ROLE, GERENTE_ROLE, ADMIN_ROLE))
+		usuarioAuthRoutes.Use(authMidware.AuthenticationMiddleware(), midware.RoleMidware(COLABORADOR_ROLE, GERENTE_ROLE, ADMIN_ROLE, FINANCEIRO_ROLE))
 		{
 			usuarioAuthRoutes.PUT("", usuarioController.UpdateUsuario)
 			usuarioAuthRoutes.GET("", usuarioController.GetUsuarioById)
@@ -214,7 +238,7 @@ func setupCargoRoutes(
 ) {
 	v1 := router.Group("/api/v1")
 	{
-		v1.GET("/cargos", authMidware.AuthenticationMiddleware(), midware.RoleMidware(ADMIN_ROLE, GERENTE_ROLE, COLABORADOR_ROLE), cargoController.GetAll)
+		v1.GET("/cargos", authMidware.AuthenticationMiddleware(), midware.RoleMidware(ADMIN_ROLE, GERENTE_ROLE, COLABORADOR_ROLE, FINANCEIRO_ROLE), cargoController.GetAll)
 
 		adminCargos := v1.Group("/admin/cargos")
 		adminCargos.Use(authMidware.AuthenticationMiddleware(), midware.RoleMidware(ADMIN_ROLE))
@@ -232,7 +256,7 @@ func setupSetorRoutes(
 ) {
 	v1 := router.Group("/api/v1")
 	{
-		v1.GET("/setores", authMidware.AuthenticationMiddleware(), midware.RoleMidware(ADMIN_ROLE, GERENTE_ROLE, COLABORADOR_ROLE), setorController.GetAll)
+		v1.GET("/setores", authMidware.AuthenticationMiddleware(), midware.RoleMidware(ADMIN_ROLE, GERENTE_ROLE, COLABORADOR_ROLE, FINANCEIRO_ROLE), setorController.GetAll)
 
 		adminSetores := v1.Group("/admin/setores")
 		adminSetores.Use(authMidware.AuthenticationMiddleware(), midware.RoleMidware(ADMIN_ROLE))

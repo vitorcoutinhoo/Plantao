@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"testing"
 	"time"
 
+	"plantao/internal/domain/financeiro"
 	"plantao/internal/domain/plantao"
 	"plantao/internal/domain/shared"
 
@@ -21,6 +23,48 @@ func TestTranslateTransactionErrorMapeiaConcorrencia(t *testing.T) {
 		if !errors.Is(err, plantao.ErrorConflitoConcorrencia) {
 			t.Fatalf("SQLSTATE %s não foi mapeado: %v", code, err)
 		}
+	}
+}
+
+func TestPlantaoTransactionFindValorDiaCentavosAceitaZero(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL não configurada")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	pool, err := pgxpool.New(ctx, databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+
+	const tipoDia = financeiro.TipoDia("TESTE_VALOR_ZERO_CODEX")
+	_, _ = pool.Exec(ctx, `DELETE FROM config_valores_dia WHERE tipo_dia = $1`, tipoDia)
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cleanupCancel()
+		_, _ = pool.Exec(cleanupCtx, `DELETE FROM config_valores_dia WHERE tipo_dia = $1`, tipoDia)
+	})
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO config_valores_dia (tipo_dia, valor, vigencia_inicio)
+		VALUES ($1, 0, '1900-01-01')
+	`, tipoDia); err != nil {
+		t.Fatal(err)
+	}
+
+	repository := NewPlantaoRepository(pool)
+	var centavos int64
+	err = repository.WithTransaction(ctx, func(tx plantao.PlantaoTransaction) error {
+		centavos, err = tx.FindValorDiaCentavos(ctx, tipoDia)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if centavos != 0 {
+		t.Fatalf("centavos = %d, esperado 0", centavos)
 	}
 }
 
@@ -286,15 +330,16 @@ func TestPlantaoRepositoryRelatorioIntegracao(t *testing.T) {
 	defer pool.Close()
 
 	const (
-		colaboradorA = "10000000-0000-0000-0000-000000000020"
-		colaboradorB = "10000000-0000-0000-0000-000000000021"
-		plantaoA     = "20000000-0000-0000-0000-000000000020"
-		plantaoB     = "20000000-0000-0000-0000-000000000021"
-		semDetalhes  = "20000000-0000-0000-0000-000000000022"
+		colaboradorA      = "10000000-0000-0000-0000-000000000020"
+		colaboradorB      = "10000000-0000-0000-0000-000000000021"
+		plantaoA          = "20000000-0000-0000-0000-000000000020"
+		plantaoB          = "20000000-0000-0000-0000-000000000021"
+		semDetalhes       = "20000000-0000-0000-0000-000000000022"
+		plantaoEntreMeses = "20000000-0000-0000-0000-000000000023"
 	)
 	cleanup := func(cleanupCtx context.Context) {
-		_, _ = pool.Exec(cleanupCtx, `DELETE FROM plantoes_detalhes WHERE id_plantao IN ($1, $2, $3)`, plantaoA, plantaoB, semDetalhes)
-		_, _ = pool.Exec(cleanupCtx, `DELETE FROM plantoes WHERE id IN ($1, $2, $3)`, plantaoA, plantaoB, semDetalhes)
+		_, _ = pool.Exec(cleanupCtx, `DELETE FROM plantoes_detalhes WHERE id_plantao IN ($1, $2, $3, $4)`, plantaoA, plantaoB, semDetalhes, plantaoEntreMeses)
+		_, _ = pool.Exec(cleanupCtx, `DELETE FROM plantoes WHERE id IN ($1, $2, $3, $4)`, plantaoA, plantaoB, semDetalhes, plantaoEntreMeses)
 		_, _ = pool.Exec(cleanupCtx, `DELETE FROM colaboradores WHERE id IN ($1, $2)`, colaboradorA, colaboradorB)
 	}
 	cleanup(ctx)
@@ -328,8 +373,9 @@ func TestPlantaoRepositoryRelatorioIntegracao(t *testing.T) {
 		VALUES
 			($1, $4, '2026-08-01T03:00:00Z', '2026-08-03T03:00:00Z', '2', 0, 'plantão A'),
 			($2, $5, '2026-08-15T03:00:00Z', '2026-08-15T03:00:00Z', '4', 999.00, NULL),
-			($3, $4, '2026-08-10T03:00:00Z', '2026-08-10T03:00:00Z', '1', NULL, NULL)
-	`, plantaoA, plantaoB, semDetalhes, colaboradorA, colaboradorB); err != nil {
+			($3, $4, '2026-08-10T03:00:00Z', '2026-08-10T03:00:00Z', '1', NULL, NULL),
+			($4, $4, '2026-01-01T03:00:00Z', '2026-02-04T03:00:00Z', '2', 0, 'plantão entre meses')
+	`, plantaoA, plantaoB, semDetalhes, plantaoEntreMeses, colaboradorA, colaboradorB); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := pool.Exec(ctx, `
@@ -365,15 +411,15 @@ func TestPlantaoRepositoryRelatorioIntegracao(t *testing.T) {
 			ultimaData:   "2026-08-15",
 		},
 		{
-			nome: "período recorta os dias do plantão",
+			nome: "período retorna todos os dias do plantão sobreposto",
 			filtro: &plantao.RelatorioFiltro{
 				DataInicio: time.Date(2026, 8, 2, 0, 0, 0, 0, time.UTC),
 				DataFim:    time.Date(2026, 8, 2, 0, 0, 0, 0, time.UTC),
 			},
-			esperados:    1,
+			esperados:    3,
 			plantaoID:    plantaoA,
-			primeiraData: "2026-08-02",
-			ultimaData:   "2026-08-02",
+			primeiraData: "2026-08-01",
+			ultimaData:   "2026-08-03",
 		},
 		{
 			nome:      "filtro por colaborador",
@@ -458,9 +504,46 @@ func TestPlantaoRepositoryRelatorioIntegracao(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(itensRecortados) != 1 || itensRecortados[0].PlantaoID != plantaoA ||
+	if len(itensRecortados) != 3 || itensRecortados[0].PlantaoID != plantaoA ||
 		itensRecortados[0].ValorTotal != 300+valorConfiguradoDomingo {
-		t.Fatalf("recorte não preservou total completo: %+v", itensRecortados)
+		t.Fatalf("plantão sobreposto não preservou período e total completos: %+v", itensRecortados)
+	}
+
+	itensEntreMeses, err := repository.FindRelatorio(ctx, &plantao.RelatorioFiltro{
+		DataInicio: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+		DataFim:    time.Date(2026, 1, 31, 0, 0, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(itensEntreMeses) != 35 ||
+		itensEntreMeses[0].PlantaoID != plantaoEntreMeses ||
+		itensEntreMeses[0].Data.Format("2006-01-02") != "2026-01-01" ||
+		itensEntreMeses[len(itensEntreMeses)-1].Data.Format("2006-01-02") != "2026-02-04" {
+		t.Fatalf("plantão entre meses não retornou período completo: %+v", itensEntreMeses)
+	}
+	var totalEntreMeses float64
+	for _, item := range itensEntreMeses {
+		if item.ValorTotal != itensEntreMeses[0].ValorTotal {
+			t.Fatalf("total inconsistente no plantão entre meses: %+v", itensEntreMeses)
+		}
+		totalEntreMeses += item.Valor
+	}
+	if math.Abs(itensEntreMeses[0].ValorTotal-totalEntreMeses) > 0.000001 {
+		t.Fatalf("total entre meses = %.2f, esperado %.2f", itensEntreMeses[0].ValorTotal, totalEntreMeses)
+	}
+	statusConcluido := plantao.StatusPlantaoConcluido
+	itensEntreMesesComFiltros, err := repository.FindRelatorio(ctx, &plantao.RelatorioFiltro{
+		DataInicio:    time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+		DataFim:       time.Date(2026, 1, 31, 0, 0, 0, 0, time.UTC),
+		ColaboradorID: colaboradorA,
+		Status:        &statusConcluido,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(itensEntreMesesComFiltros) != 35 || itensEntreMesesComFiltros[0].PlantaoID != plantaoEntreMeses {
+		t.Fatalf("filtros não preservaram plantão completo entre meses: %+v", itensEntreMesesComFiltros)
 	}
 	var detalhesSemPersistencia int
 	if err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM plantoes_detalhes WHERE id_plantao = $1`, semDetalhes).Scan(&detalhesSemPersistencia); err != nil {
