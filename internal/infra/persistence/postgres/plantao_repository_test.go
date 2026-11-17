@@ -411,15 +411,12 @@ func TestPlantaoRepositoryRelatorioIntegracao(t *testing.T) {
 			ultimaData:   "2026-08-15",
 		},
 		{
-			nome: "período retorna todos os dias do plantão sobreposto",
+			nome: "período não inclui plantão iniciado antes do filtro",
 			filtro: &plantao.RelatorioFiltro{
 				DataInicio: time.Date(2026, 8, 2, 0, 0, 0, 0, time.UTC),
 				DataFim:    time.Date(2026, 8, 2, 0, 0, 0, 0, time.UTC),
 			},
-			esperados:    3,
-			plantaoID:    plantaoA,
-			primeiraData: "2026-08-01",
-			ultimaData:   "2026-08-03",
+			esperados: 0,
 		},
 		{
 			nome:      "filtro por colaborador",
@@ -504,14 +501,37 @@ func TestPlantaoRepositoryRelatorioIntegracao(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(itensRecortados) != 3 || itensRecortados[0].PlantaoID != plantaoA ||
-		itensRecortados[0].ValorTotal != 300+valorConfiguradoDomingo {
-		t.Fatalf("plantão sobreposto não preservou período e total completos: %+v", itensRecortados)
+	if len(itensRecortados) != 0 {
+		t.Fatalf("plantão iniciado antes do filtro foi retornado: %+v", itensRecortados)
+	}
+
+	itensLimites, err := repository.FindRelatorio(ctx, &plantao.RelatorioFiltro{
+		DataInicio: time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC),
+		DataFim:    time.Date(2026, 8, 3, 0, 0, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(itensLimites) != 3 || itensLimites[0].PlantaoID != plantaoA ||
+		itensLimites[0].Data.Format("2006-01-02") != "2026-08-01" ||
+		itensLimites[2].Data.Format("2006-01-02") != "2026-08-03" {
+		t.Fatalf("plantão nos limites inclusivos não foi retornado completo: %+v", itensLimites)
 	}
 
 	itensEntreMeses, err := repository.FindRelatorio(ctx, &plantao.RelatorioFiltro{
 		DataInicio: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
 		DataFim:    time.Date(2026, 1, 31, 0, 0, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(itensEntreMeses) != 0 {
+		t.Fatalf("plantão que termina após o filtro foi retornado: %+v", itensEntreMeses)
+	}
+
+	itensEntreMeses, err = repository.FindRelatorio(ctx, &plantao.RelatorioFiltro{
+		DataInicio: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+		DataFim:    time.Date(2026, 2, 4, 0, 0, 0, 0, time.UTC),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -542,7 +562,7 @@ func TestPlantaoRepositoryRelatorioIntegracao(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(itensEntreMesesComFiltros) != 35 || itensEntreMesesComFiltros[0].PlantaoID != plantaoEntreMeses {
+	if len(itensEntreMesesComFiltros) != 0 {
 		t.Fatalf("filtros não preservaram plantão completo entre meses: %+v", itensEntreMesesComFiltros)
 	}
 	var detalhesSemPersistencia int
