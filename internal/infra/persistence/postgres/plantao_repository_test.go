@@ -642,7 +642,11 @@ func TestPlantaoRepositoryCriacaoComSobreposicaoPorColaborador(t *testing.T) {
 			},
 		}
 	}
-	data := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	location, err := time.LoadLocation("America/Sao_Paulo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	data := time.Date(2026, 9, 1, 0, 0, 0, 0, location)
 	hora := func(h int) time.Time { return data.Add(time.Duration(h) * time.Hour) }
 
 	if err := repository.Store(ctx, novoPlantao("20000000-0000-0000-0000-000000000030", colaboradores[0], hora(8), hora(12), plantao.StatusPlantaoAgendado)); err != nil {
@@ -663,20 +667,23 @@ func TestPlantaoRepositoryCriacaoComSobreposicaoPorColaborador(t *testing.T) {
 		}
 	}
 
-	if err := repository.Store(ctx, novoPlantao("20000000-0000-0000-0000-000000000035", colaboradores[0], hora(12), hora(14), plantao.StatusPlantaoAgendado)); err != nil {
-		t.Fatalf("período adjacente foi rejeitado: %v", err)
+	if err := repository.Store(ctx, novoPlantao("20000000-0000-0000-0000-000000000035", colaboradores[0], hora(12), hora(14), plantao.StatusPlantaoAgendado)); !errors.Is(err, plantao.ErrorExistingPlantao) {
+		t.Fatalf("período adjacente no mesmo dia = %v, esperado conflito", err)
+	}
+	if err := repository.Store(ctx, novoPlantao("20000000-0000-0000-0000-000000000042", colaboradores[0], hora(24), hora(26), plantao.StatusPlantaoAgendado)); err != nil {
+		t.Fatalf("plantão iniciado no dia seguinte foi rejeitado: %v", err)
 	}
 	if _, err := pool.Exec(ctx, `
 		INSERT INTO plantoes (id, id_colaborador, data_inicio, data_fim, status)
 		VALUES ('20000000-0000-0000-0000-000000000036', $1, $2, $3, '3')
-	`, colaboradores[0], hora(15), hora(18)); err != nil {
+	`, colaboradores[0], hora(48+15), hora(48+18)); err != nil {
 		t.Fatal(err)
 	}
-	if err := repository.Store(ctx, novoPlantao("20000000-0000-0000-0000-000000000037", colaboradores[0], hora(16), hora(17), plantao.StatusPlantaoAgendado)); err != nil {
+	if err := repository.Store(ctx, novoPlantao("20000000-0000-0000-0000-000000000037", colaboradores[0], hora(48+16), hora(48+17), plantao.StatusPlantaoAgendado)); err != nil {
 		t.Fatalf("plantão cancelado bloqueou o período: %v", err)
 	}
 
-	ponto := hora(20)
+	ponto := hora(96 + 20)
 	if err := repository.Store(ctx, novoPlantao("20000000-0000-0000-0000-000000000038", colaboradores[0], ponto, ponto, plantao.StatusPlantaoAgendado)); err != nil {
 		t.Fatal(err)
 	}
@@ -747,6 +754,14 @@ func TestPlantaoRepositoryCriacaoComSobreposicaoPorColaborador(t *testing.T) {
 	}
 
 	const plantaoEditadoID = "20000000-0000-0000-0000-000000000041"
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO plantoes (id, id_colaborador, data_inicio, data_fim, status)
+		VALUES
+			($1, $3, $4, $5, '0'),
+			('20000000-0000-0000-0000-000000000043', $2, $6, $7, '0')
+	`, plantaoEditadoID, colaboradores[3], colaboradores[0], hora(72), hora(74), hora(8), hora(10)); err != nil {
+		t.Fatal(err)
+	}
 	err = repository.WithTransaction(ctx, func(tx plantao.PlantaoTransaction) error {
 		p, err := tx.LockPlantao(ctx, plantaoEditadoID)
 		if err != nil {
@@ -765,19 +780,19 @@ func TestPlantaoRepositoryCriacaoComSobreposicaoPorColaborador(t *testing.T) {
 		if !sobreposto {
 			t.Fatal("edição não detectou plantão sobreposto do colaborador de destino")
 		}
-		sobreposto, err = tx.HasOverlappingPlantao(ctx, colaboradores[3], hora(14), hora(16), p.Id)
+		sobreposto, err = tx.HasOverlappingPlantao(ctx, colaboradores[3], hora(24+14), hora(24+16), p.Id)
 		if err != nil {
 			return err
 		}
 		if sobreposto {
 			t.Fatal("edição detectou sobreposição inexistente")
 		}
-		atualizado, err := tx.UpdateSchedule(ctx, p.Id, colaboradores[3], hora(14), hora(16))
+		atualizado, err := tx.UpdateSchedule(ctx, p.Id, colaboradores[3], hora(24+14), hora(24+16))
 		if err != nil {
 			return err
 		}
-		if atualizado.ColaboradorId != colaboradores[3] || !atualizado.Periodo.Inicio.Equal(hora(14)) ||
-			!atualizado.Periodo.Fim.Equal(hora(16)) || atualizado.Status != plantao.StatusPlantaoAgendado {
+		if atualizado.ColaboradorId != colaboradores[3] || !atualizado.Periodo.Inicio.Equal(hora(24+14)) ||
+			!atualizado.Periodo.Fim.Equal(hora(24+16)) || atualizado.Status != plantao.StatusPlantaoAgendado {
 			t.Fatalf("plantão recarregado incorretamente: %+v", atualizado)
 		}
 		return nil
@@ -791,7 +806,7 @@ func TestPlantaoRepositoryCriacaoComSobreposicaoPorColaborador(t *testing.T) {
 		if _, err := tx.LockPlantao(ctx, plantaoEditadoID); err != nil {
 			return err
 		}
-		if _, err := tx.UpdateSchedule(ctx, plantaoEditadoID, colaboradores[3], hora(15), hora(17)); err != nil {
+		if _, err := tx.UpdateSchedule(ctx, plantaoEditadoID, colaboradores[3], hora(24+15), hora(24+17)); err != nil {
 			return err
 		}
 		return sentinel
@@ -809,8 +824,8 @@ func TestPlantaoRepositoryCriacaoComSobreposicaoPorColaborador(t *testing.T) {
 	`, plantaoEditadoID).Scan(&colaboradorPersistido, &inicioPersistido, &fimPersistido, &statusPersistido); err != nil {
 		t.Fatal(err)
 	}
-	if colaboradorPersistido != colaboradores[3] || !inicioPersistido.Equal(hora(14)) ||
-		!fimPersistido.Equal(hora(16)) || statusPersistido != "0" {
+	if colaboradorPersistido != colaboradores[3] || !inicioPersistido.Equal(hora(24+14)) ||
+		!fimPersistido.Equal(hora(24+16)) || statusPersistido != "0" {
 		t.Fatalf("rollback/preservação incorretos: %s/%s/%s/%s", colaboradorPersistido, inicioPersistido, fimPersistido, statusPersistido)
 	}
 }

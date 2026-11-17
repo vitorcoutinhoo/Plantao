@@ -489,8 +489,8 @@ func (t *plantaoTransaction) HasOverlappingPlantao(
 			  AND status <> $4
 			  AND ($5::uuid IS NULL OR id <> $5::uuid)
 			  AND (
-				(data_inicio < $3 AND data_fim > $2)
-				OR (data_inicio = data_fim AND $2 = $3 AND data_inicio = $2)
+				(data_inicio AT TIME ZONE 'America/Sao_Paulo')::date <= ($3 AT TIME ZONE 'America/Sao_Paulo')::date
+				AND (data_fim AT TIME ZONE 'America/Sao_Paulo')::date >= ($2 AT TIME ZONE 'America/Sao_Paulo')::date
 			  )
 		)
 	`, colaboradorID, inicio, fim, strconv.Itoa(int(plantao.StatusPlantaoCancelado)), excludedID).Scan(&sobreposto)
