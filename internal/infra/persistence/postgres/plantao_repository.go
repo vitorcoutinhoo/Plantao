@@ -285,7 +285,7 @@ func (r *PlantaoRepository) FindRelatorio(ctx context.Context, filtro *plantao.R
 		FROM plantoes p
 		JOIN colaboradores c ON p.id_colaborador = c.id
 		WHERE (p.data_inicio AT TIME ZONE 'America/Sao_Paulo')::date >= $1::date
-		  AND (p.data_fim AT TIME ZONE 'America/Sao_Paulo')::date <= $2::date
+		  AND (p.data_inicio AT TIME ZONE 'America/Sao_Paulo')::date <= $2::date
 	`
 	args := []any{filtro.DataInicio, filtro.DataFim}
 	arg := 3

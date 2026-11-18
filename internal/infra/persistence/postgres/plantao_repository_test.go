@@ -496,7 +496,7 @@ func TestPlantaoRepositoryRelatorioIntegracao(t *testing.T) {
 
 	itensRecortados, err := repository.FindRelatorio(ctx, &plantao.RelatorioFiltro{
 		DataInicio: time.Date(2026, 8, 2, 0, 0, 0, 0, time.UTC),
-		DataFim:    time.Date(2026, 8, 2, 0, 0, 0, 0, time.UTC),
+		DataFim:    time.Date(2026, 8, 3, 0, 0, 0, 0, time.UTC),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -525,8 +525,11 @@ func TestPlantaoRepositoryRelatorioIntegracao(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(itensEntreMeses) != 0 {
-		t.Fatalf("plantão que termina após o filtro foi retornado: %+v", itensEntreMeses)
+	if len(itensEntreMeses) != 35 ||
+		itensEntreMeses[0].PlantaoID != plantaoEntreMeses ||
+		itensEntreMeses[0].Data.Format("2006-01-02") != "2026-01-01" ||
+		itensEntreMeses[len(itensEntreMeses)-1].Data.Format("2006-01-02") != "2026-02-04" {
+		t.Fatalf("plantão iniciado no filtro não retornou período completo, mesmo terminando depois: %+v", itensEntreMeses)
 	}
 
 	itensEntreMeses, err = repository.FindRelatorio(ctx, &plantao.RelatorioFiltro{
@@ -562,8 +565,8 @@ func TestPlantaoRepositoryRelatorioIntegracao(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(itensEntreMesesComFiltros) != 0 {
-		t.Fatalf("filtros não preservaram plantão completo entre meses: %+v", itensEntreMesesComFiltros)
+	if len(itensEntreMesesComFiltros) != 35 {
+		t.Fatalf("filtros não preservaram plantão iniciado no período: %+v", itensEntreMesesComFiltros)
 	}
 	var detalhesSemPersistencia int
 	if err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM plantoes_detalhes WHERE id_plantao = $1`, semDetalhes).Scan(&detalhesSemPersistencia); err != nil {

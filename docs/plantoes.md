@@ -249,13 +249,15 @@ GET /api/v1/plantoes/relatorio?data_inicio=2026-08-01&data_fim=2026-08-31&status
 ]
 ```
 
-O intervalo é inclusivo e seleciona os plantões que se sobrepõem a ele em
-`America/Sao_Paulo`. Para cada plantão selecionado, a resposta contém todos os
-seus dias civis, desde o início real até o fim real, mesmo que parte deles esteja
-fora do intervalo consultado. Quando existir detalhe persistido para a data, seu
-valor histórico será utilizado. Caso contrário, o relatório determina se o dia
-é útil, sábado, domingo ou feriado e usa a configuração global do tipo. Feriados
-têm prioridade sobre o dia da semana.
+O intervalo é inclusivo e seleciona plantões cuja data de início esteja entre
+`data_inicio` e `data_fim`, considerando as datas civis em `America/Sao_Paulo`.
+A data de término não influencia a seleção. Para cada plantão selecionado, a
+resposta contém todos os seus dias civis, desde o início real até o fim real,
+mesmo que parte deles esteja fora do intervalo consultado. Quando existir
+detalhe persistido para a data, seu valor histórico será utilizado. Caso
+contrário, o relatório determina se o dia é útil, sábado, domingo ou feriado e
+usa a configuração global do tipo. Feriados têm prioridade sobre o dia da
+semana.
 
 O campo `valor_total` usa o valor persistido no plantão quando ele for diferente
 de zero. Quando o valor persistido for `0` ou `NULL`, o relatório soma todos os
